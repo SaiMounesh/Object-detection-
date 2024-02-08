@@ -1,0 +1,57 @@
+
+import tensorflow as tf
+import cv2
+import numpy as np
+
+model_path = 'C:\\Users\\SaiMounesh\\Downloads\\faster_rcnn\\saved_model'
+model = tf.saved_model.load(model_path)
+
+video_path = 'C:\\Users\\SaiMounesh\\anaconda3\\cars_around_mountain.mp4'
+cap = cv2.VideoCapture(video_path)
+
+input_tensor_name = 'input_tensor'
+
+# Video Writer
+output_path = 'outputiii.mp4'
+frame_width = int(cap.get(3))
+frame_height = int(cap.get(4))
+fps = cap.get(cv2.CAP_PROP_FPS)
+codec = cv2.VideoWriter_fourcc(*'XVID')
+out = cv2.VideoWriter(output_path, codec, fps, (frame_width, frame_height))
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    image_np = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    image_tensor = tf.convert_to_tensor(image_np)
+    input_data = {input_tensor_name: tf.expand_dims(image_tensor, axis=0)}
+    detections = model.signatures['serving_default'](**input_data)
+
+    num_detections = int(detections['num_detections'][0])
+    detection_scores = detections['detection_scores'][0, :num_detections]
+    detection_classes = detections['detection_classes'][0, :num_detections]
+    detection_boxes = detections['detection_boxes'][0, :num_detections]
+
+    for score, class_id, bbox in zip(detection_scores, detection_classes, detection_boxes):
+        if score > 0.5:
+            height, width, _ = frame.shape
+            ymin, xmin, ymax, xmax = bbox
+            xmin = int(xmin * width)
+            xmax = int(xmax * width)
+            ymin = int(ymin * height)
+            ymax = int(ymax * height)
+
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+            cv2.putText(frame, str(int(class_id)), (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+    out.write(frame)
+    cv2.imshow('Object Detection', frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+out.release()
+cv2.destroyAllWindows()
+
